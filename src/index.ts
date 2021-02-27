@@ -2,15 +2,31 @@ import fs from 'fs/promises';
 import svelte from 'svelte/compiler';
 import { mdsvex, compile } from 'mdsvex';
 import yaml from 'js-yaml';
+import { SnowpackPlugin, SnowpackUserConfig } from 'snowpack';
+import { CompileOptions } from 'svelte/types/compiler/interfaces';
 
-export default function plugin(snowpackConfig, opts) {
+interface PluginOpts {
+  /**
+   * path to the default HTML template to use for generating pages
+   */
+  defaultTemplate?: string;
+  /**
+   * list of directories to generate static pages for
+   * @default ['pages']
+   */
+  pagesDirs?: (string | { dir: string; template: string })[];
+}
+
+export default function plugin(
+  snowpackConfig: SnowpackUserConfig,
+  opts: PluginOpts
+): SnowpackPlugin {
   const defaultTemplate = opts.defaultTemplate || './snowsvex-plugin/base.html';
   const pagesDirs = opts.pagesDirs || [
     { dir: 'pages', template: defaultTemplate },
   ];
   const isDev = process.env.NODE_ENV !== 'production';
-  const useSourceMaps = snowpackConfig.buildOptions.sourceMaps;
-  const hmrOptions = opts.hmrOptions;
+  const useSourceMaps = snowpackConfig.buildOptions?.sourcemap;
 
   return {
     name: 'snowsvex-plugin',
@@ -26,7 +42,7 @@ export default function plugin(snowpackConfig, opts) {
     config() {
       return { ...opts, defaultTemplate };
     },
-    async load({ filePath, isHmrEnabled, isSSR }) {
+    async load({ filePath, isSSR }) {
       const segments = filePath.split('/');
       const filename = segments[segments.length - 1].split('.')[0];
 
@@ -39,11 +55,16 @@ export default function plugin(snowpackConfig, opts) {
       const svexOpts = {
         // layout: './src/Layout.svelte' // TODO make this dynamic
       };
+      //@ts-ignore
       const preprocessed = await svelte.preprocess(contents, mdsvex(svexOpts), {
         filename: filePath,
       });
-
-      const compileOptions = {
+      if (!preprocessed.toString) {
+        throw new Error(
+          'No toString method returned from svelte preprocess stage'
+        );
+      }
+      const compileOptions: CompileOptions = {
         generate: isSSR ? 'ssr' : 'dom',
         hydratable: true,
         css: false,
@@ -61,23 +82,6 @@ export default function plugin(snowpackConfig, opts) {
         },
       };
 
-      // TODO get Hmr working
-      // if (isHmrEnabled && !isSSR) {
-      // 	output['.js'].code = makeHot({
-      // 		id: filePath,
-      // 		compiledCode: js.code,
-      // 		hotOptions: {
-      // 			...hmrOptions,
-      // 			absoluteImports: false,
-      // 			injectCss: true,
-      // 			noOverlay: true
-      // 		},
-      // 		compiled,
-      // 		originalCode: preprocessed,
-      // 		compileOptions
-      // 	})
-      // }
-
       if (!compileOptions.css && css && css.code) {
         output['.css'] = {
           code: css.code,
@@ -87,9 +91,10 @@ export default function plugin(snowpackConfig, opts) {
 
       await Promise.all(
         pagesDirs.map(async opt => {
-          const { dir, template } = opt.hasOwnProperty('dir')
-            ? opt
-            : { dir: opt, template: defaultTemplate };
+          const { dir, template } =
+            typeof opt === 'object'
+              ? opt
+              : { dir: opt, template: defaultTemplate };
           if (filePath.includes(dir)) {
             const html = await generateHtml({
               dir,
@@ -107,7 +112,20 @@ export default function plugin(snowpackConfig, opts) {
   };
 }
 
-async function generateHtml({ dir, filePath, filename, template, title }) {
+type GenerateHtmlProps = {
+  dir: string;
+  filePath: string;
+  filename: string;
+  template: string;
+  title?: string;
+};
+async function generateHtml({
+  dir,
+  filePath,
+  filename,
+  template,
+  title,
+}: GenerateHtmlProps) {
   console.log(`processing page at ${filePath}`);
   const base = await fs.readFile(template, 'utf-8');
   const outputJs = `/${dir}/${filename.replace('.svelte', '.js')}`;
