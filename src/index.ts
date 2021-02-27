@@ -1,30 +1,16 @@
 import fs from 'fs/promises';
 import svelte from 'svelte/compiler';
 import { mdsvex, compile } from 'mdsvex';
-import yaml from 'js-yaml';
 import { SnowpackPlugin, SnowpackUserConfig } from 'snowpack';
 import { CompileOptions } from 'svelte/types/compiler/interfaces';
-
-interface PluginOpts {
-  /**
-   * path to the default HTML template to use for generating pages
-   */
-  defaultTemplate?: string;
-  /**
-   * list of directories to generate static pages for
-   * @default ['pages']
-   */
-  pagesDirs?: (string | { dir: string; template: string })[];
-}
+import { SnowsvexPluginOpts } from './types';
+import { generateHtml } from './html';
 
 export default function plugin(
   snowpackConfig: SnowpackUserConfig,
-  opts: PluginOpts
+  opts: SnowsvexPluginOpts
 ): SnowpackPlugin {
-  const defaultTemplate = opts.defaultTemplate || './snowsvex-plugin/base.html';
-  const pagesDirs = opts.pagesDirs || [
-    { dir: 'pages', template: defaultTemplate },
-  ];
+  const pagesDirs = opts.pagesDirs || ['pages'];
   const isDev = process.env.NODE_ENV !== 'production';
   const useSourceMaps = snowpackConfig.buildOptions?.sourcemap;
 
@@ -39,8 +25,12 @@ export default function plugin(
       'svelte-hmr/runtime/hot-api-esm.js',
       'svelte-hmr/runtime/proxy-adapter-dom.js',
     ],
+    /**
+     * @returns the plugin options
+     * Can be called externally by the build script later
+     */
     config() {
-      return { ...opts, defaultTemplate };
+      return { ...opts };
     },
     async load({ filePath, isSSR }) {
       const segments = filePath.split('/');
@@ -55,7 +45,7 @@ export default function plugin(
       const svexOpts = {
         // layout: './src/Layout.svelte' // TODO make this dynamic
       };
-      //@ts-ignore
+      //@ts-ignore -- mdsvex + svelte not playing nice!
       const preprocessed = await svelte.preprocess(contents, mdsvex(svexOpts), {
         filename: filePath,
       });
@@ -90,17 +80,12 @@ export default function plugin(
       }
 
       await Promise.all(
-        pagesDirs.map(async opt => {
-          const { dir, template } =
-            typeof opt === 'object'
-              ? opt
-              : { dir: opt, template: defaultTemplate };
+        pagesDirs.map(async dir => {
           if (filePath.includes(dir)) {
             const html = await generateHtml({
               dir,
               filePath,
               filename,
-              template,
             });
             output['.html'] = { code: html };
           }
@@ -109,49 +94,5 @@ export default function plugin(
 
       return output;
     },
-  };
-}
-
-type GenerateHtmlProps = {
-  dir: string;
-  filePath: string;
-  filename: string;
-  template: string;
-  title?: string;
-};
-async function generateHtml({
-  dir,
-  filePath,
-  filename,
-  template,
-  title,
-}: GenerateHtmlProps) {
-  console.log(`processing page at ${filePath}`);
-  const base = await fs.readFile(template, 'utf-8');
-  const outputJs = `/${dir}/${filename.replace('.svelte', '.js')}`;
-  const outputCss = `/${dir}/${filename}.css`;
-  const processedHtml = base
-    .replace('{{COMP}}', outputJs)
-    .replace('{{TITLE}}', title || filename)
-    .replace('{{CSS}}', outputCss);
-  return processedHtml;
-}
-
-async function compileWithFrontmatter(filePath: string) {
-  let frontmatter: Record<string, unknown> = {};
-  const output = await compile(filePath, {
-    frontmatter: {
-      type: 'yaml',
-      marker: '-',
-      parse: fm => {
-        const matter = yaml.load(fm) as Record<string, unknown>;
-        frontmatter = matter;
-        return matter;
-      },
-    },
-  });
-  return {
-    ...output,
-    frontmatter,
   };
 }
