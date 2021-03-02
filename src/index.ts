@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import svelte from 'svelte/compiler';
-import { mdsvex, compile } from 'mdsvex';
+import { mdsvex } from 'mdsvex';
 import { SnowpackPlugin, SnowpackUserConfig } from 'snowpack';
 import { CompileOptions } from 'svelte/types/compiler/interfaces';
 import { SnowsvexPluginOpts } from './types';
@@ -37,10 +37,6 @@ export default function plugin(
       const filename = segments[segments.length - 1].split('.')[0];
 
       const contents = await fs.readFile(filePath, 'utf-8');
-      if (filePath.endsWith('.svx')) {
-        const s = await compile(filePath);
-        console.log({ s });
-      }
 
       const svexOpts = {
         // layout: './src/Layout.svelte' // TODO make this dynamic
