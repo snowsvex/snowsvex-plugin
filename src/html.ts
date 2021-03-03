@@ -40,6 +40,7 @@ async function generateHtml({
     <link rel="stylesheet" href="${outputCss}" />
   </head>
   <body>
+    <!-- [PRERENDER] -->
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <script type="module">
       import comp from '/${outputJs}'

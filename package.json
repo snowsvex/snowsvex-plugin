@@ -1,6 +1,6 @@
 {
   "name": "@snowsvex/snowsvex-plugin",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "> Snowpack plugin for building svex-y static sites with svelte",
   "license": "MIT",
   "author": "Conor Sinclair",
