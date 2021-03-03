@@ -42,7 +42,7 @@ async function generateHtml({
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <script type="module">
-      import comp from './${outputJs}'
+      import comp from '/${outputJs}'
 
       let app = new comp({
         target: document.body,
